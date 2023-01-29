@@ -1,6 +1,9 @@
-#include "/home/harshit/fpp/assignment1/library/stamp.h"			// stamp APIs are declared here
+#include "stamp.h"			// stamp APIs are declared here
 #include <iostream>
 #include <assert.h>
+#include <time.h>
+
+using namespace std;
 
 int main(int argc, char** argv) {
   // intialize problem size
@@ -16,16 +19,25 @@ int main(int argc, char** argv) {
   std::fill(B, B+size, 1);
   std::fill(C, C+size, 0);
   // start the timer
+  clock_t start, end;
+  double time_taken;
+  start = clock();
+        // stamp API to ex
   // start the parallel addition of two vectors
   // std::cout<<"nt " << numThread;
-  parallel_for(0, size, 2, [&](int i) {
+  stamp::parallel_for(0, size, 1, [&](int i) {
     C[i] = A[i] + B[i];
   }, numThread);
   // end the timer
+  end = clock();
+  time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
+  cout << "Time taken for execution is : " << time_taken << " sec " <<endl;
+
   // verify the result vector
   for(int i=0; i<size; i++) {
-    if (i % 2 == 0) assert(C[i] == 2);
-    else assert(C[i] == 0);
+    // if (i % 2 == 0) 
+    assert(C[i] == 2);
+    // else assert(C[i] == 0);
   }
   printf("Test Success\n");
   // cleanup memory

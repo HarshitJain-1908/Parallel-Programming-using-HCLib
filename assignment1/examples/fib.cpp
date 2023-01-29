@@ -1,7 +1,8 @@
-#include "/home/harshit/fpp/assignment1/library/stamp.h"			// stamp APIs are declared here
+#include "stamp.h"			// stamp APIs are declared here
+#include <time.h>
 #include <iostream>
 
-// using namespace stamp;
+using namespace std;
 
 int fib(int n) {
     if(n<2) return n;
@@ -14,8 +15,15 @@ int main(int argc, char** argv) {
     if(n<30) result = fib(n);
     else {
         int x, y;
+        clock_t start, end;
+        double time_taken;
+        start = clock();
         // stamp API to execute two tasks (C++11 lambda) in parallel
-        execute_tuple([&]() { x=fib(n-1); }, [&]() { y=fib(n-2); });
+        stamp::execute_tuple([&]() { x=fib(n-1); }, [&]() { y=fib(n-2); });
+        end = clock();
+
+        time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
+        cout << "Time taken for execution is : " << time_taken << " sec " <<endl;
         result = x + y;
     }
     printf("Fib of %d = %d\n",n, result);
