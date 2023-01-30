@@ -5,26 +5,31 @@
 
 using namespace stamp;
 
+//structure for passing arguments to pthread_create with required attributes for API used in fibonacci
 struct thread_args1{
     std::function<void()> input_fun;
 };
 
+//structure for passing arguments to pthread_create with required attributes for API used in vector
 struct thread_args2{
     int no_of_times, offset, stride;
     std::function<void(int)> input_fun;
 };
 
+//structure for passing arguments to pthread_create with required attributes for API used in matrix
 struct thread_args3{
     int low, high, size;
     std::function<void(int, int)> input_fun;
 };
 
+//function to be executed by thread to perform the task assigned in fibonacci program
 void *thread_func1(void *ptr){
 
     ((thread_args1 *) ptr)->input_fun();
     return NULL;
 }
 
+//function to be executed by thread to perform the task assigned in vector addition program
 void *thread_func2(void *ptr){
 
     for (int i = 0; i < ((thread_args2 *) ptr)->no_of_times; i += ((thread_args2 *) ptr)->stride){
@@ -33,6 +38,7 @@ void *thread_func2(void *ptr){
     return NULL;
 }
 
+//function to be executed by thread to perform the task assigned in matrix multiplication program
 void *thread_func3(void *ptr){
         
     for (int i = ((thread_args3 *) ptr)->low; i < ((thread_args3 *) ptr)->high; i++){
@@ -41,6 +47,7 @@ void *thread_func3(void *ptr){
     return NULL;
 }
 
+//multithreaded API to do fibonacci calculation
 void stamp::execute_tuple(std::function<void()> &&lambda1, std::function<void()> &&lambda2){
 
     pthread_t thread;
@@ -52,6 +59,7 @@ void stamp::execute_tuple(std::function<void()> &&lambda1, std::function<void()>
     pthread_join(thread, NULL);
 }
 
+//multithreaded API to do vector addition
 void stamp::parallel_for(int low, int high, int stride, std::function<void(int)> &&lambda, int numThreads){
 
     pthread_t *thread;
@@ -83,10 +91,14 @@ void stamp::parallel_for(int low, int high, int stride, std::function<void(int)>
     }
 }
 
+//multithreaded API to do vector addition
 void stamp::parallel_for(int high, std::function<void(int)> &&lambda, int numThreads){
+    //calling above defined function with required parameters to avoid code repetition
+    //providing pre-defined values to suitable parameters and type casting lambda function before passing
     stamp::parallel_for(0, high, 1, (std::function<void(int)>)lambda, numThreads);
 }
 
+//multithreaded API to do matrix multiplication
 void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, int stride2,
     std::function<void(int, int)> &&lambda, int numThreads){
 
@@ -118,6 +130,9 @@ void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, 
     }
 }
 
+//multithreaded API to do matrix multiplication
 void parallel_for(int high1, int high2, std::function<void(int, int)> &&lambda, int numThreads){
+    //calling above defined function with required parameters to avoid code repetition
+    //providing pre-defined values to suitable parameters and type casting lambda function before passing
     stamp::parallel_for(0, high1, 1, 0, high2, 1, (std::function<void(int, int)>) lambda, numThreads);
 }
