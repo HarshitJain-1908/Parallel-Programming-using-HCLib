@@ -2,6 +2,7 @@
 #include <iostream>
 #include <pthread.h>
 #include <cmath>
+#include <time.h>
 
 using namespace stamp;
 
@@ -50,17 +51,38 @@ void *thread_func3(void *ptr){
 //multithreaded API to do fibonacci calculation
 void stamp::execute_tuple(std::function<void()> &&lambda1, std::function<void()> &&lambda2){
 
+    clock_t start, end;
+    double time_taken;
+    start = clock();
+
+    int numThreads = 1;
     pthread_t thread;
     thread_args1 args;
     args.input_fun = lambda1;
-
-    pthread_create(&thread, NULL, thread_func1, (void*) &args);
+    
+    int status;
+    status = pthread_create(&thread, NULL, thread_func1, (void*) &args);
+    if (status != 0){
+        perror("pthread_create() error");
+        exit(1);
+    }
     lambda2();
-    pthread_join(thread, NULL);
+    status = pthread_join(thread, NULL);
+    if (status != 0){
+        perror("pthread_join() error");
+        exit(1);
+    }
+    end = clock();
+    time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
+    std::cout << "StaMp Statistics: " << numThreads << ", Parallel execution time = " << time_taken << " sec " <<std::endl;
 }
 
 //multithreaded API to do vector addition
 void stamp::parallel_for(int low, int high, int stride, std::function<void(int)> &&lambda, int numThreads){
+
+    clock_t start, end;
+    double time_taken;
+    start = clock();
 
     pthread_t *thread;
     thread_args2 *args;
@@ -68,7 +90,7 @@ void stamp::parallel_for(int low, int high, int stride, std::function<void(int)>
     thread = (pthread_t *) malloc (numThreads*sizeof(pthread_t));
     args = (thread_args2 *) malloc (numThreads*sizeof(thread_args2));
 
-    int t = 0;
+    int t = 0, status;
 
     for (int i = 0; i < numThreads; i++){
         
@@ -77,18 +99,26 @@ void stamp::parallel_for(int low, int high, int stride, std::function<void(int)>
         (&args[i])->offset = low;
         (&args[i])->stride = stride;
         low += stride * (&args[i])->no_of_times;
-        pthread_create(&thread[i], NULL, thread_func2, (void*) &args[i]);
-        // if ((void *)status != NULL){
-        //     std::perror("Thread creation failed");
-        //     exit(EXIT_FAILURE);
-        // }
+        
+        status = pthread_create(&thread[i], NULL, thread_func2, (void*) &args[i]);
+        if (status != 0){
+            perror("pthread_create() error");
+            exit(1);
+        }
         t++;
         if (low >= high) break;
     }
     
     for (int i = 0; i < numThreads; i++){
-        pthread_join(thread[i], NULL);
+        status = pthread_join(thread[i], NULL);
+        if (status != 0){
+            perror("pthread_join() error");
+            exit(1);
+        }
     }
+    end = clock();
+    time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
+    std::cout << "StaMp Statistics: " << numThreads << ", Parallel execution time = " << time_taken << " sec " <<std::endl;
 }
 
 //multithreaded API to do vector addition
@@ -101,6 +131,10 @@ void stamp::parallel_for(int high, std::function<void(int)> &&lambda, int numThr
 //multithreaded API to do matrix multiplication
 void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, int stride2,
     std::function<void(int, int)> &&lambda, int numThreads){
+    
+    clock_t start, end;
+    double time_taken;
+    start = clock();
 
     pthread_t *thread;
     thread_args3 *args;
@@ -128,6 +162,9 @@ void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, 
     for (int i = 0; i < numThreads; i++){
         pthread_join(thread[i], NULL);
     }
+    end = clock();
+    time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
+    std::cout << "StaMp Statistics: " << numThreads << ", Parallel execution time = " << time_taken << " sec " <<std::endl;
 }
 
 //multithreaded API to do matrix multiplication
