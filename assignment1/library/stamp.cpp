@@ -11,13 +11,13 @@ struct thread_args1{
     std::function<void()> input_fun;
 };
 
-//structure for passing arguments to pthread_create with required attributes for API used in vector
+//structure for passing arguments to pthread_create with required attributes for API used in vector addition
 struct thread_args2{
     int no_of_times, offset, stride;
     std::function<void(int)> input_fun;
 };
 
-//structure for passing arguments to pthread_create with required attributes for API used in matrix
+//structure for passing arguments to pthread_create with required attributes for API used in matrix multiplication
 struct thread_args3{
     int low, high, size;
     std::function<void(int, int)> input_fun;
@@ -58,15 +58,16 @@ void stamp::execute_tuple(std::function<void()> &&lambda1, std::function<void()>
     int numThreads = 1;
     pthread_t thread;
     thread_args1 args;
+    //mapping tasks to the thread
     args.input_fun = lambda1;
     
     int status;
-    status = pthread_create(&thread, NULL, thread_func1, (void*) &args);
+    status = pthread_create(&thread, NULL, thread_func1, (void*) &args); //creating thread for executing lambda1 in parallel
     if (status != 0){
         perror("pthread_create() error");
         exit(1);
     }
-    lambda2();
+    lambda2(); //executing this in the same thread as no other work to do in this thread
     status = pthread_join(thread, NULL);
     if (status != 0){
         perror("pthread_join() error");
@@ -94,6 +95,7 @@ void stamp::parallel_for(int low, int high, int stride, std::function<void(int)>
 
     for (int i = 0; i < numThreads; i++){
         
+        //mapping a number of tasks to each of the threads
         (&args[i])->no_of_times = (ceil)((double)(high-low)/(stride * (numThreads-t)));
         (&args[i])->input_fun = lambda;
         (&args[i])->offset = low;
@@ -146,6 +148,7 @@ void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, 
     int total_tasks = (ceil)((double)((high1-low1)*(high2-low2)/(stride1*stride2)));
     for (int i = 0; i < numThreads; i++){
         
+        //mapping a number of tasks to each of the threads
         n = (ceil)((double)(total_tasks - offset)/(numThreads-t));
         (&args[i])->low = offset;
         (&args[i])->input_fun = lambda;
