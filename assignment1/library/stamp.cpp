@@ -33,8 +33,8 @@ void *thread_func1(void *ptr){
 //function to be executed by thread to perform the task assigned in vector addition program
 void *thread_func2(void *ptr){
 
-    for (int i = 0; i < ((thread_args2 *) ptr)->no_of_times; i += ((thread_args2 *) ptr)->stride){
-        ((thread_args2 *) ptr)->input_fun((((thread_args2 *) ptr)->offset) + i);
+    for (int i = 0; i < ((thread_args2 *) ptr)->no_of_times; i++){
+        ((thread_args2 *) ptr)->input_fun((((thread_args2 *) ptr)->offset) + i*((thread_args2 *) ptr)->stride);
     }
     return NULL;
 }
@@ -142,7 +142,7 @@ void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, 
     thread = (pthread_t *) malloc (numThreads*sizeof(pthread_t));
     args = (thread_args3 *) malloc (numThreads*sizeof(thread_args3));
 
-    int t = 0, offset = 0, n;
+    int status, t = 0, offset = 0, n;
     int total_tasks = (ceil)((double)((high1-low1)*(high2-low2)/(stride1*stride2)));
     for (int i = 0; i < numThreads; i++){
         
@@ -152,15 +152,21 @@ void stamp::parallel_for(int low1, int high1, int stride1, int low2, int high2, 
         (&args[i])->high = (&args[i])->low + n;
         (&args[i])->size = high1 - low1;
         offset += n;
-        // printf("no_of_times %d low %d high %d offset %d\n", (&args[i])->no_of_times, (&args[i])->low, (&args[i])->high, offset);
-
-        pthread_create(&thread[i], NULL, thread_func3, (void*) &args[i]);
+        status = pthread_create(&thread[i], NULL, thread_func3, (void*) &args[i]);
+        if (status != 0){
+            perror("pthread_create() error");
+            exit(1);
+        }
         t++;
         if (offset >= total_tasks) break;
     }
     
     for (int i = 0; i < numThreads; i++){
-        pthread_join(thread[i], NULL);
+        status = pthread_join(thread[i], NULL);
+        if (status != 0){
+            perror("pthread_join() error");
+            exit(1);
+        }
     }
     end = clock();
     time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
