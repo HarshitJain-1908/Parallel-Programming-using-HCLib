@@ -1,4 +1,4 @@
-#include "/home/harshit/fpp/assignment1/library/stamp.h"			// stamp APIs are declared here
+#include "stamp.h"			// stamp APIs are declared here
 #include <assert.h>
 
 int main(int argc, char** argv) {
@@ -21,20 +21,13 @@ int main(int argc, char** argv) {
     }
   }  
   // start the parallel multiplication of two matrices
-  parallel_for(0, size, 1, 0, size, 1, [&](int i, int j) {
+  stamp::parallel_for(0, size, 1, 0, size, 1, [&](int i, int j) {
     for(int k=0; k<size; k++) {
       C[i][j] += A[i][k] * B[k][j];
     }
   }, numThread);
   // verify the result matrix
-  for(int i=0; i<size; i++){
-    for(int j=0; j<size; j++) {
-      assert(C[i][j] == size);
-      // printf("%d ", C[i][j]);
-    }
-    // printf("\n");
-  }
-    
+  for(int i=0; i<size; i++) for(int j=0; j<size; j++) assert(C[i][j] == size);
   printf("Test Success. \n");
   // cleanup memory
   for(int i=0; i<size; i++) {
