@@ -70,7 +70,6 @@ int solutions[16] =
 };
 
 volatile int *atomic;
-int count = 0;
 
 /*
  * <a> contains array of <n> queen positions.  Returns 0
@@ -104,10 +103,8 @@ void nqueens_kernel(int* A, int depth, int size) {
       B[depth] = i;
       int failed = ok((depth +  1), B); 
       if (!failed) {
-        // printf("calling async\n");
-	quill::async([&]() {
+	quill::async([=]() {
           nqueens_kernel(B, depth+1, size);
-          printf("In lambda\n");
 	});
       }
   }
@@ -131,8 +128,9 @@ long get_usecs (void)
 int main(int argc, char* argv[])
 {
   quill::init_runtime();
-  int n = 1;
-  // int i, j;
+  int n = 11;
+  int i, j;
+     
   if(argc > 1) n = atoi(argv[1]);
      
   double dur = 0;
@@ -151,7 +149,6 @@ int main(int argc, char* argv[])
   dur = ((double)(end-start))/1000000;
   verify_queens(n);  
   free((void*)atomic);
-  // printf("count is: %d\n", count);
   printf("NQueens(%d) Time = %fsec\n",n,dur);
 
   quill::finalize_runtime();

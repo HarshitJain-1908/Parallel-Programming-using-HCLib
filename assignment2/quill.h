@@ -1,4 +1,5 @@
 #include <functional>
+#include <cstdio>
 
 namespace quill{
 
