@@ -3,222 +3,192 @@
 #include <pthread.h>
 #include <cstring>
 #include <stdio.h>
+#include <cstdlib>
 #include <stdlib.h>
 #include "iostream"
 #include <functional>
 
-#define DEQUE_SIZE 400
 using namespace quill_runtime;
 
 struct pthread_args{
-    int id;
+    // int id;
+    quill_deque* deq;
 };
 
 volatile bool shutdown = false;
 volatile int finish_counter = 0;
 pthread_key_t ws_key;
 pthread_t *thread;
-pthread_mutex_t lock1, lock2;
-quill_deque deque;
+pthread_mutex_t lock1;
+quill_deque *deque;
 
-// void *quill_runtime::worker_routine(void *args){
-//     printf("In worker_routine\n");
+void *quill_runtime::worker_routine(void *args){
     
-//     //assigns id to the thread
-//     int id = ((pthread_args *)args)->id;
-//     pthread_setspecific(ws_key, (void *)&id);
+    //assigns id to the thread
+    // int id = ((pthread_args *)args)->id;
+    quill_deque* pool = (*((pthread_args *) args)).deq;
+    pthread_mutex_init(&((*pool).lock), NULL);
+    pthread_setspecific(ws_key, (void *)pool);
 
-//     while (!shutdown){break;
-//         // printf("hello bro\n");
-//         // find_and_execute_task();
-//     }
-//     return NULL;
-// }
+    while (!shutdown){
+        printf("In worker_routine\n");
+        find_and_execute_task();
+    }
+    return NULL;
+}
 
-// int quill_runtime::thread_pool_size(){
-//     // int num_workers= atoi(getenv("QUILL_WORKERS"));
-//     // return num_workers;
-//     return 1;
-// }
+int quill_runtime::thread_pool_size(){
+    // int num_workers= atoi(getenv("QUILL_WORKERS"));
+    // return num_workers;
+    return 2;
+}
 
-// void quill_runtime::lock_finish(){
-//     pthread_mutex_lock(&_lock);
-// }
+void quill_runtime::lock_finish(){
+    pthread_mutex_lock(&lock1);
+}
 
-// void quill_runtime::unlock_finish(){
-//     pthread_mutex_unlock(&_lock);
-// }
+void quill_runtime::unlock_finish(){
+    pthread_mutex_unlock(&lock1);
+}
 
-// void quill_runtime::push_task_to_runtime(quill_deque *deque, quill_task *ptr){
-//     // printf("pushing task\n");
-//     if (*head == -1) {
-//         //deque empty
-//         *head = 0;
-//     }
-//     // memcpy((void *)&deque[++tail].work, ptr, sizeof(std::function<void()>));
-//     // deque[++tail].work = (std::function<void()> *) ptr;
+void quill_runtime::lock_deque(quill_deque* deq){
+    pthread_mutex_lock(&((*deq).lock));
+}
 
-//     *tail+=1;
-//     deque[*tail] = (quill_task *) malloc(sizeof(quill_task*));
-//     deque[*tail]->work = (quill_task *) malloc(sizeof(quill_task));
-//     memcpy((void*)deque[*tail]->work, (void *)ptr, sizeof(quill_task));
-    
-//     // std::function<void()> fun = *(deque[*tail]->work);
-//     // fun();
+void quill_runtime::unlock_deque(quill_deque* deq){
+    pthread_mutex_unlock(&((*deq).lock));
+}
 
-//     printf("tail is: %d\n", *tail);
 
-//     // deque[tail].work();
-//     printf("phir bahar\n");
-// }
+void quill_runtime::push_task_to_runtime(quill_deque* deq, quill_task* ptr){
 
-void quill_runtime::push_task_to_runtime(quill_task* ptr){
-
-    if ((deque.tail == DEQUE_SIZE-1 && deque.head == 0) || (deque.tail == (deque.head-1)%(DEQUE_SIZE-1))){
+    if (((*deq).tail == DEQUE_SIZE-1 && (*deq).head == 0) || ((*deq).tail == ((*deq).head-1)%(DEQUE_SIZE-1))){
         //deque overflow
         return;
     }else{
-        if (deque.head == -1){
-        deque.head = 0;
-        deque.tail = 0;
+        if ((*deq).head == -1){
+            // printf("me too\n");
+            (*deq).head = 0;
+            (*deq).tail = 0;
         }else{
-            if (deque.tail == DEQUE_SIZE-1 && deque.head != 0){
-                deque.tail = 0;
+            if ((*deq).tail == DEQUE_SIZE-1 && (*deq).head != 0){
+                (*deq).tail = 0;
             }else{
-                deque.tail++;
+                (*deq).tail++;
             }
         }
     }
     
-    printf("pushing task at %d \n", deque.tail);
-    deque.tasks[deque.tail] = ptr;
-    
+    printf("pushing task, tail: %d head is: %d\n", (*deq).tail, (*deq).head);
+    (*deq).tasks[(*deq).tail] = *ptr;
 }
 
-quill_task* quill_runtime::grab_task_from_runtime(){
-    //use locks for popping the task out from the deque
-    quill_task* task = NULL;
-    // lock_finish();
+quill_task quill_runtime::grab_task_from_runtime(quill_deque* deq){
+    quill_task task;
+    task = pop(deq);
+    if (task != NULL){
+        return task;
+    }else{
+        //victim becomes thief
+        int steal_deque = rand() % thread_pool_size();
+        printf("stealing from deque: %d", steal_deque);
+        task = steal(&deque[steal_deque]);
+        if (task != NULL){
+            return task;
+        }
+    }
+    return NULL;
+}
 
-    pthread_mutex_lock(&lock2);
-    if (deque.head == -1){
+quill_task quill_runtime::pop(quill_deque* deq){
+    //use locks for popping the task out from the deque
+    quill_task task = NULL;
+
+    lock_deque(deq);
+    if (deq == NULL) printf("aisa h kya\n");
+    if ((*deq).tail == -1){
+        printf("I am here.\n");
         return NULL;
     }else{
-        task = deque.tasks[deque.head];
-        if (deque.head == deque.tail){
-            deque.head = -1;
-            deque.tail = -1;
+        printf("pop task from %d\n", (*deq).tail);
+        task = (*deq).tasks[(*deq).tail];
+        if ((*deq).head == (*deq).tail){
+            (*deq).head = -1;
+            (*deq).tail = -1;
         }else{
-            if (deque.head == DEQUE_SIZE-1){
-                deque.head = 0;
+            (*deq).tail--;
+        }
+    }
+    
+    unlock_deque(deq);
+    return task;
+}
+
+quill_task quill_runtime::steal(quill_deque* deq){
+    //use locks for popping the task out from the deque
+    quill_task task = NULL;
+
+    lock_deque(deq);
+    if ((*deq).head == -1){
+        printf("I am here.\n");
+        return NULL;
+    }else{
+        printf("steal task from head: %d\n", (*deq).head);
+        task = (*deq).tasks[(*deq).head];
+        if ((*deq).head == (*deq).tail){
+            (*deq).head = -1;
+            (*deq).tail = -1;
+        }else{
+            if ((*deq).head == DEQUE_SIZE-1){
+                (*deq).head = 0;
             }else{
-                deque.head++;
+                (*deq).head++;
             }
         }
     }
     
-    pthread_mutex_unlock(&lock2);
+    unlock_deque(deq);
     return task;
-    // return NULL;
-
-    // printf("head: %d\n", head);
-    // if (pool->head <= pool->tail) {
-    //     printf("head: %d tail: %d\n", pool->head, pool->tail);
-        
-    //     // task = (pool->tasks)[pool->head++];
-    //     // task = pool-
-    //     // task = *(pool->tasks)[];
-    //     task();
-    //     // fun();
-
-    //     // *head+=1;
-    //     // return deque[*head-1]->work;
-    //     // quill_task* fun = (std::function<void()>*) malloc(sizeof(std::function<void()>));
-    //     // fun = (std::function<void()>*) malloc(sizeof(std::function<void()>));
-    //     // memcpy((void*) fun, (void*)deque[*head]->work, sizeof(std::function<void()>));
-
-    //     // std::function<void()> f = *fun;
-    //     // f();
-    //     // *head += 1;
-    //     // lock_finish();
-    //     // finish_counter--;
-    //     // unlock_finish();
-    //     // deque[head++].work();
-    //     // head++;
-    //     // l();
-    // } else task = NULL;
-    // unlock_finish();
-    // return task;
-    // return NULL;
 }
-
 void quill::init_runtime() {
-    // head=(int*)malloc(sizeof(int));
-    // *head=-1;
-    // tail=(int*)malloc(sizeof(int));
-    // *tail=-1;
 
     printf("In init_runtime\n");
-    // deque.task = malloc(sizeof(quill_task));
 
-    deque.head = -1;
-    deque.tail = -1;
+    int size = thread_pool_size();
+   
+    deque = (quill_deque*) malloc(size*sizeof(quill_deque));
     
+    //intialising deque of all the workers
+    for (int i = 0; i < size; i++){
+        // deque[i] = (quill_deque*) malloc(sizeof(quill_deque));
+        // deque[i] = (quill_deque) malloc(sizeof(quill_deque));
+        deque[i].head = -1;
+        deque[i].tail = -1;
+        deque[i].tasks = (quill_task*) malloc(DEQUE_SIZE*sizeof(quill_task));
+        // deque[i].tasks = new quill_task*[DEQUE_SIZE];
+    }
+    // printf("pushing task at %d head is: %d\n", deque[0].tail, deque[0].head);
+    thread = (pthread_t *) malloc (size*sizeof(pthread_t));
 
-    // deque = (quill_deque **) malloc(1 * sizeof(quill_deque*));--
-    // deque[0] = (quill_deque *) malloc(sizeof(quill_deque));--
-
-    // int size = thread_pool_size();
-
-    // thread = (pthread_t *) malloc (size*sizeof(pthread_t));
-
-    // if (pthread_key_create(&ws_key, NULL) != 0) {
-    //     perror("Cannot create ws_key for worker-specific data");
-    // }
+    if (pthread_key_create(&ws_key, NULL) != 0) {
+        perror("Cannot create ws_key for worker-specific data");
+    }
     
-    // pthread_args *args = (pthread_args *) malloc(size * sizeof(pthread_args));
+    pthread_args *args = (pthread_args *) malloc(size * sizeof(pthread_args));
     //assigning id to the master thread
     // (&args[0])->id = 0;
-    pthread_mutex_init(&lock1, NULL);
-    pthread_mutex_init(&lock2, NULL);
-    deque.tasks = new quill_task*[DEQUE_SIZE];
+    (&args[0])->deq = &deque[0];
+    pthread_setspecific(ws_key, (void *)(&deque[0]));
 
-    // for(int i=1; i<size; i++) {
-    //     // ptr = (pthread_key_value *) malloc(sizeof(pthread_key_value));
-    //     (&args[i])->id = i;
-    //     // (void) pthread_setspecific(ws_key, (void *) new int(i));
-    //     pthread_create(&thread[i], NULL, worker_routine, (void *)&args);
-    // }
+    pthread_mutex_init(&lock1, NULL);
+    pthread_mutex_init(&(deque[0].lock), NULL);
+
+    for(int i=1; i<size; i++) {
+        (&args[i])->deq = &deque[i];
+        pthread_create(&thread[i], NULL, worker_routine, (void *)(&args[i]));
+    }
 }
 
-// void quill::init_runtime() {
-//     head=(int*)malloc(sizeof(int));
-//     *head=-1;
-//     tail=(int*)malloc(sizeof(int));
-//     *tail=-1;
-
-//     printf("In init_runtime\n");
-//     deque = (task_ds**) malloc(50 * sizeof(task_ds*));
-//     int size = thread_pool_size();
-
-//     thread = (pthread_t *) malloc (size*sizeof(pthread_t));
-
-//     // if (pthread_key_create(&ws_key, NULL) != 0) {
-//     //     perror("Cannot create ws_key for worker-specific data");
-//     // }
-    
-//     // pthread_args *args = (pthread_args *) malloc(size * sizeof(pthread_args));
-//     //assigning id to the master thread
-//     // (&args[0])->id = 0;
-    // pthread_mutex_init(&_lock, NULL);
-
-//     // for(int i=1; i<size; i++) {
-//     //     // ptr = (pthread_key_value *) malloc(sizeof(pthread_key_value));
-//     //     (&args[i])->id = i;
-//     //     // (void) pthread_setspecific(ws_key, (void *) new int(i));
-//     //     pthread_create(&thread[i], NULL, worker_routine, (void *)&args);
-//     // }
-// }
 
 void quill::start_finish(){
     printf("In start_finish\n");
@@ -226,129 +196,81 @@ void quill::start_finish(){
 }
 
 void quill::async(std::function<void()> &&lambda) {
-    printf("In async\n");
-    // lock_finish();
-    pthread_mutex_lock(&lock1);
+    // printf("In async\n");
+    lock_finish();
     finish_counter++; //concurrent access
-    // unlock_finish();
-    pthread_mutex_unlock(&lock1);
+    unlock_finish();
+
     // copy task on heap
-    // quill_task* p = (quill_task *) malloc(sizeof(quill_task));
-    // quill_task *p = (quill_task *) malloc(sizeof(quill_task));
-    // memcpy((void *)p, (void *)&lambda, sizeof(quill_task));
-    // deque[0]->head = deque[0]->tail = -1;
-    // deque[0]->tasks = (quill_task *) malloc(sizeof(quill_task));
-    // deque[0]->tasks[0] = (quill_task *) malloc(sizeof(quill_task));
-
-    // deque.head = deque.tail = -1;
-    // deque.task = *(new quill_task(lambda));
     quill_task* p = new quill_task(lambda);
-    if (deque.head == -1){
-        deque.head = 0;
-    }
-    
-    deque.tail += 1;
-    printf("pushing task at %d \n", deque.tail);
+    // int* idx = (int*) pthread_getspecific(ws_key);
+    // pthread_args
+    quill_deque* deq = (quill_deque*) pthread_getspecific(ws_key);
+    // quill_deque* deq = (quill_deque*) (*(pthread_args *)(*((pthread_args**) pthread_getspecific(ws_key)))).deq;
+    // printf("idx: %d\n", *idx);
 
-    // std::function<void()>* p1 = new std::function<void()> (ptr);
-    // deque.tasks
-    // deque.tasks[deque.tail] = p;
-    push_task_to_runtime(p);
-
-    // quill_runtime::push_task_to_runtime(deque, *p);
-
-    // deque[0]->tasks = (quill_task *) malloc(sizeof(quill_task));
-    // quill_runtime::push_task_to_runtime(deque[0], *p);--
-
-    //thread-safe push_task_to_runtime
-    // if (*head == -1) {
-    //     //deque empty
-    //     *head = 0;
-    // }
-    // *tail+=1;
-    // deque[*tail] = (task_ds*) malloc(sizeof(task_ds));
-    // deque[*tail]->work = (std::function<void()>*) malloc(sizeof(std::function<void()>));
-    // deque[*tail]->work = &lambda;
-    
-    // push_task_to_runtime();
-
-    // grab_task_from_runtime(deque[0]);
-    // std::function<void()>* x=(std::function<void()>*) p;
-    // std::function<void()> fun=*x;
-    // fun();
-
-    
-    // grab_task_from_runtime(deque[0]);
-    // lambda();
-    // printf("yes\n");
+    // printf("idx: %d\n", idx);
+    printf("calling push\n");
+    push_task_to_runtime(deq, p);
     return;
 }
 
 void quill::end_finish() {
     printf("In end_finish\n");
     while(finish_counter != 0) {
-        // (*(((deque[0])->tasks)[0]))();
-        // if (deque[0]->tasks[0] != NULL){
-        printf("hello\n");
-        printf("head: %d\n", deque.head);
-        // grab_task_from_runtime(deque[0]);
-        // grab_task_from_runtime();
-        // }
+        // printf("head: %d\n", deque.head);
         find_and_execute_task();
-        // finish_counter = 0;
     }
 }
 
+void quill_runtime::execute_task(quill_task task){
+    task();
+    std::cout<<"completed"<<std::endl;
+}
 
 void quill_runtime::find_and_execute_task() {
     
     // grab_from_runtime is thread-safe
+    // int idx = ((pthread_args*) pthread_getspecific(ws_key))->id;
+    quill_deque* deq =  (quill_deque*) pthread_getspecific(ws_key);
+    // printf("trying to grab idx: %d\n", idx);
 
-    quill_task* task = grab_task_from_runtime();
-    // std::function<void()>* t = (std::function<void()>*) malloc(sizeof(std::function<void()>));
-    // *t = task;
-    if (task == NULL) printf("hmm\n");
+    quill_task task = grab_task_from_runtime(deq);
+    printf("doing smthg\n");
+    if (task == NULL) {
+        printf("null mila\n");
+        // return;
+    }
     else{
-        
-        // execute_task(task);
-        std::function<void()> fun=*task;
-        fun();
-        std::cout<<"completed"<<std::endl;
-        // free(task);
-        // // (*t)();
-        // delete()
-        // free((void*)t);
-        // free
-        // lock_finish();
+        execute_task(task);        
+        // free((void *)task);
         pthread_mutex_lock(&lock1);
         finish_counter--;
         pthread_mutex_unlock(&lock1);
 
     }
-    // printf("aisa kya\n");
-    // if(task != NULL) {
-    //     printf("start\n");
-    //     // execute_task(task);
-    //     // std::function<void()> fun= *task;
-    //     // fun();
-    //     printf("end\n");
-        // free((void*)task);
-    //     lock_finish();
-    //     finish_counter--;
-    //     unlock_finish();
-    //     printf("In find_and_execute %d\n", finish_counter);
+    // task = deque[0].tasks[0];
+    // if (task != NULL) {
+    //     printf("I got a task from %d.\n", deque[0].head);
+    //     task();
     // }
+    // else printf("Nope\n");
+    return;
 }
 
 void quill::finalize_runtime() {
     //all spinning workers
     //will exit worker_routine
     shutdown = true;
-    // int size = thread_pool_size();
-    // // master waits for helpers to join
-    // for(int i=1; i<size; i++) {
-    //     pthread_join(thread[i], NULL);
-    // }
-    // pthread_mutex_destroy(&lock1);
-    // pthread_mutex_destroy(&lock2);
+    printf("shutting down\n");
+    int size = thread_pool_size();
+    // master waits for helpers to join
+    for(int i=1; i<size; i++) {
+        pthread_join(thread[i], NULL);
+    }
+    pthread_mutex_destroy(&lock1);
+    for (int i = 0; i < size; i++){
+        quill_deque d = deque[i];
+        pthread_mutex_destroy(&(d.lock));
+    }
 }
