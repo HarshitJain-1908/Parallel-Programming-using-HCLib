@@ -33,7 +33,8 @@ void *quill_runtime::worker_routine(void *args){
 }
 
 int quill_runtime::thread_pool_size(){
-    int num_workers= atoi(getenv("QUILL_WORKERS"));
+    char *val = getenv("QUILL_WORKERS");
+    int num_workers = val != NULL ? std::__cxx11::stoi(val) : 1;
     return num_workers;
 }
 
@@ -56,42 +57,40 @@ void quill_runtime::unlock_deque(quill_deque* deq){
 
 void quill_runtime::push_task_to_runtime(quill_deque* deq, quill_task* ptr){
 
-    // lock_deque(deq);
     if (((*deq).tail == DEQUE_SIZE-1 && (*deq).head == 0) || ((*deq).tail == ((*deq).head-1)%(DEQUE_SIZE-1))){
         //deque overflow
-        printf("Deque overflow\n");
-        // exit(1);
-        return;
+        printf("Oops! Deque Overflow, increase deque size\n");
+        exit(1);
     }else{
         if ((*deq).head == -1){
-            // lock_deque(deq);
-            (*deq).head = 0;
             (*deq).tail = 0;
-            // (*deq).tasks[(*deq).tail] = *ptr;
-            // unlock_deque(deq);
+            (*deq).tasks[(*deq).tail] = *ptr;
+            (*deq).head = 0;
         }else{
             if ((*deq).tail == DEQUE_SIZE-1 && (*deq).head != 0){
                 (*deq).tail = 0;
             }else{
                 (*deq).tail++;
             }
+            (*deq).tasks[(*deq).tail] = *ptr;
         }
     }
-
-    (*deq).tasks[(*deq).tail] = *ptr;
-
 }
 
 quill_task quill_runtime::grab_task_from_runtime(quill_deque* deq){
 
     quill_task task;
+    int cur_id;
+    
+
+    cur_id = (*deq).id;
     task = pop(deq);
 
     if (task != NULL){
         return task;
     }else{
         //victim becomes thief
-        int cur_id = (*deq).id;
+        
         int s = thread_pool_size();
         int r = rand() % s;
         while (cur_id == r){
@@ -116,8 +115,8 @@ quill_task quill_runtime::pop(quill_deque* deq){
     if ((*deq).tail != -1){
         task = (*deq).tasks[(*deq).tail];
         if ((*deq).head == (*deq).tail){
-            (*deq).head = -1;
             (*deq).tail = -1;
+            (*deq).head = -1;
         }else{
             (*deq).tail--;
         }
@@ -134,10 +133,10 @@ quill_task quill_runtime::steal(quill_deque* deq, int cur_id){
     
     if ((*deq).head != -1){
         task = (*deq).tasks[(*deq).head];
-
+        
         if ((*deq).head == (*deq).tail){
-            (*deq).head = -1;
             (*deq).tail = -1;
+            (*deq).head = -1;
         }else{
             if ((*deq).head == DEQUE_SIZE-1){
                 (*deq).head = 0;

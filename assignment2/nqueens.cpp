@@ -104,7 +104,6 @@ void nqueens_kernel(int* A, int depth, int size) {
       int failed = ok((depth +  1), B); 
       if (!failed) {
 	quill::async([=]() {
-          // printf("in lambda\n");
           nqueens_kernel(B, depth+1, size);
 	});
       }
@@ -129,7 +128,7 @@ long get_usecs (void)
 int main(int argc, char* argv[])
 {
   quill::init_runtime();
-  int n = 3;
+  int n = 11;
   int i, j;
      
   if(argc > 1) n = atoi(argv[1]);
