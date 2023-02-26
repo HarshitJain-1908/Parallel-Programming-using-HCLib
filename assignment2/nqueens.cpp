@@ -104,6 +104,7 @@ void nqueens_kernel(int* A, int depth, int size) {
       int failed = ok((depth +  1), B); 
       if (!failed) {
 	quill::async([=]() {
+          // printf("in lambda\n");
           nqueens_kernel(B, depth+1, size);
 	});
       }
