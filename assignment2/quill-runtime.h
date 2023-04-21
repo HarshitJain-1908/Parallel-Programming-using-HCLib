@@ -1,7 +1,7 @@
 #include <functional>
 
 #define quill_task std::function<void()>
-#define DEQUE_SIZE 50
+#define DEQUE_SIZE 45
 
 namespace quill_runtime{
 
