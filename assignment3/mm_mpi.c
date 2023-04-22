@@ -39,15 +39,14 @@ int main(int argc, char **argv) {
     }
     
     int batch_size = N/np;
-    // if (batch_size*np != N) batch_size++;
 
-    int tag = 123; // any value
+    int tag = 123;
     MPI_Status stats;
 
     if (rank == 0) {
         int dest;
 
-        //initilaizing A and B
+        //initilaizing A and B by the master only
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 A[i][j] = 1;
@@ -119,7 +118,7 @@ int main(int argc, char **argv) {
 
         long end = get_usecs();
         double dur = ((double)(end-initial))/1000000;
-        printf("Time = %.3f\n", dur);
+        printf("Time = %.3fs\n", dur);
         
     }else {
 
