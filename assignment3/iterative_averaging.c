@@ -30,11 +30,15 @@ int main(int argc, char **argv) {
 
     int start[np], end[np];
     int batch_size = N/np;
+    if (batch_size*np != N) batch_size++;
+    // if (rank == 0) printf("rank%d %d\n", rank, batch_size);
     start[0] = 0, end[0] = batch_size;
     int left = N - batch_size;
 
     for (int t = 1; t < np; t++) {
         batch_size = left/(np-t);
+        if (batch_size*(np-t) != left) batch_size++;
+        // printf("rank%d t%d %d\n", rank, t, batch_size);
         start[t] = end[t-1];
         end[t] = start[t] + batch_size;
         left = left - batch_size;
@@ -57,74 +61,90 @@ int main(int argc, char **argv) {
     for (int i = 0; i < SIZE; i++) *A[i] = 0;
 
     // for (int i = 0; i < SIZE; i++) {
-    //     printf("%f ", A[i]);
+    //     printf("Rank%d prints A[%d] = %f\n", rank, i, *A[i]);
     // }
     // printf("\n");
-    for (int iter = 0; iter < NI; iter++) {
-        double val1, val2;
-        if (rank > 0) {
-            //sending first element of my chunk to (rank-1)th process
-            // MPI_Isend(A[0], 1, MPI_INT, rank-1, tag, MPI_COMM_WORLD, &req);
-            MPI_Send(A[0], 1, MPI_INT, rank-1, tag, MPI_COMM_WORLD);
-        }
+    if (SIZE > 0) {
+        for (int iter = 0; iter < NI; iter++) {
+            double val1, val2;
+            if (rank > 0) {
+                //sending first element of my chunk to (rank-1)th process
+                // if (end[rank-1]-start[rank-1] > 0) MPI_Isend(A[0], 1, MPI_DOUBLE, rank-1, tag, MPI_COMM_WORLD, &req);
+                if (end[rank-1]-start[rank-1] > 0) MPI_Send(A[0], 1, MPI_DOUBLE, rank-1, tag, MPI_COMM_WORLD);
+                // MPI_Wait(&req, &stats);}
+            }
 
-        if (rank < np-1) {
-            //sending last element of my chunk to (rank+1)th process
-            // MPI_Isend(A[SIZE-1], 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD, &req);
-            MPI_Send(A[SIZE-1], 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD);
-        }
+            if (rank < np-1) {
+                //sending last element of my chunk to (rank+1)th process
+                // if (end[rank+1]-start[rank+1] > 0) MPI_Isend(A[SIZE-1], 1, MPI_DOUBLE, rank+1, tag, MPI_COMM_WORLD, &req);
+                // MPI_Wait(&req, &stats);}
+                // printf("size %d Rank%d sending %f\n", SIZE, rank, *A[SIZE-1]);
+                if (end[rank+1]-start[rank+1] > 0) MPI_Send(A[SIZE-1], 1, MPI_DOUBLE, rank+1, tag, MPI_COMM_WORLD);
+            }
 
-        if (rank > 0) {
-            //receiving last element of (rank-1)th process' chunk
-            // MPI_Irecv(&val1, 1, MPI_INT, rank-1, tag, MPI_COMM_WORLD, &req);
-            MPI_Recv(&val1, 1, MPI_INT, rank-1, tag, MPI_COMM_WORLD, &stats);
-        }else val1 = 0.0;
+            if (rank > 0) {
+                //receiving last element of (rank-1)th process' chunk
+                // if (end[rank-1]-start[rank-1] > 0) MPI_Irecv(&val1, 1, MPI_DOUBLE, rank-1, tag, MPI_COMM_WORLD, &req);
+                // MPI_Wait(&req, &stats);}
+                if (end[rank-1]-start[rank-1] > 0) MPI_Recv(&val1, 1, MPI_DOUBLE, rank-1, tag, MPI_COMM_WORLD, &stats);
+                else val1 = 0.0;
+            }else val1 = 0.0;
 
-        if (rank < np-1) {
-            //receiving first element of (rank+1)th process' chunk
-            // MPI_Irecv(&val2, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD, &req);
-            MPI_Recv(&val2, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD, &stats);
-        }else val2 = (N+1);
+            if (rank < np-1) {
+                //receiving first element of (rank+1)th process' chunk
+                // if (end[rank+1]-start[rank+1] > 0) MPI_Irecv(&val2, 1, MPI_DOUBLE, rank+1, tag, MPI_COMM_WORLD, &req);
+                // MPI_Wait(&req, &stats);}
+                if (end[rank+1]-start[rank+1] > 0) MPI_Recv(&val2, 1, MPI_DOUBLE, rank+1, tag, MPI_COMM_WORLD, &stats);
+                else val2 = N+1;
+                // printf("Rank%d Received %f\n", rank, val2);
+            }else val2 = (N+1);
 
-        for (int i = 1; i < SIZE-1; i++) {
-            *shadow[i] = (*A[i-1] + *A[i+1]) / 2.0;
-        }
-        printf("hi\n");
-        // MPI_Wait(&req, &stats);
-        printf("hello\n");
+            for (int i = 1; i < SIZE-1; i++) {
+                *shadow[i] = (*A[i-1] + *A[i+1]) / 2.0;
+            }
 
-        //doing first and last computation here
-        *shadow[0] = (val1 + *A[1]) / 2.0;
-        *shadow[SIZE-1] = (*A[SIZE-1] + val2) / 2.0;
-        double** temp = shadow;
-        shadow = A;
-        A = temp;
-        printf("hello\n");
+            // printf("hi\n");
+            // MPI_Wait(&req, &stats);
+            // MPI_Wait(&req, &stats);
+            // MPI_Wait(&req, &stats);
+            // MPI_Wait(&req, &stats);
+            // printf("hello\n");
 
-        for (int i = 0; i < SIZE; i++) printf("rank%d %f ", rank, *A[i]);
-        printf("\n");
-        // if (rank == 0) {
+            //doing first and last computation here
+            if (SIZE == 1) *shadow[SIZE-1] = (val1 + val2) / 2.0;
+            else {
+                *shadow[0] = (val1 + *A[1]) / 2.0;
+                *shadow[SIZE-1] = (*A[SIZE-2] + val2) / 2.0;
+            }
+            double** temp = shadow;
+            shadow = A;
+            A = temp;
             
-        //     for (int t = 1; t < np; t++) {
-        //         // double B[end[t]-start[t]];
-        //         double **B = (double**) malloc(sizeof(double) * (end[t]-start[t]));
-        //         // shadow = (double**) malloc(sizeof(double) * SIZE);
-            
-        //         for (int i = 0; i < end[t]-start[t]; i++) {
-        //             B[i] = (double*) malloc(sizeof(double));
-        //             // shadow[i] = (double*) malloc(sizeof(double));
-        //         }
-        //         for (int i = 0; i < (end[t]-start[t]); i++)
-        //             MPI_Irecv(B[i], 1, MPI_INT, t, tag, MPI_COMM_WORLD, &req);
-        //         MPI_Wait(&req, &stats);
-        //         for (int i = 0; i < (end[t]-start[t]); i++) printf("%f ", *B[i]);
-        //         printf("\n");
-        //     }
-        // }else {
-        //     for (int i = 0; i < (end[rank]-start[rank]); i++)
-        //         MPI_Isend(A[i], 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &req);
-        //     MPI_Wait(&req, &stats);
-        // }
+            // for (int i = 0; i < SIZE; i++) printf("rank%d %f ", rank, *A[i]);
+            // printf("\n");
+            // if (rank == 0) {
+                
+            //     for (int t = 1; t < np; t++) {
+            //         // double B[end[t]-start[t]];
+            //         double **B = (double**) malloc(sizeof(double) * (end[t]-start[t]));
+            //         // shadow = (double**) malloc(sizeof(double) * SIZE);
+                
+            //         for (int i = 0; i < end[t]-start[t]; i++) {
+            //             B[i] = (double*) malloc(sizeof(double));
+            //             // shadow[i] = (double*) malloc(sizeof(double));
+            //         }
+            //         for (int i = 0; i < (end[t]-start[t]); i++)
+            //             MPI_Irecv(B[i], 1, MPI_INT, t, tag, MPI_COMM_WORLD, &req);
+            //         MPI_Wait(&req, &stats);
+            //         for (int i = 0; i < (end[t]-start[t]); i++) printf("%f ", *B[i]);
+            //         printf("\n");
+            //     }
+            // }else {
+            //     for (int i = 0; i < (end[rank]-start[rank]); i++)
+            //         MPI_Isend(A[i], 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &req);
+            //     MPI_Wait(&req, &stats);
+            // }
+        }
     }
     //     // for (int i = 1; i <= N; i++) printf("%f ", *A[i]);
     //     // printf("\n");
@@ -133,11 +153,12 @@ int main(int argc, char **argv) {
     double my_sum = 0.0, total_sum = 0.0;
     for (int i = 0; i < SIZE; i++) my_sum += *A[i];
     printf("rank%d mysum:%f\n", rank, my_sum);
-    MPI_Reduce(&my_sum, &total_sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&my_sum, &total_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
         printf("Array sum = %f\n", total_sum);
     }
+    // printf("hello from rank%d\n", rank);
     MPI_Finalize();
 
     return 0;
