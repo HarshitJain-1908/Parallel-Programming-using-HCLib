@@ -99,6 +99,7 @@ int main(int argc, char **argv) {
                 // printf("Rank%d Received %f\n", rank, val2);
             }else val2 = (N+1);
 
+            #pragma omp parallel for default(none) shared(SIZE, shadow, A)
             for (int i = 1; i < SIZE-1; i++) {
                 *shadow[i] = (*A[i-1] + *A[i+1]) / 2.0;
             }
