@@ -1,0 +1,5 @@
+To run iterative_averaging.c run make and then
+->OMP_NUM_THREADS=2 mpirun -np 2 iterative_averaging 1000 64
+
+To run mm_mpi.c run make and then
+-> mpirun -np 4 mm_mpi

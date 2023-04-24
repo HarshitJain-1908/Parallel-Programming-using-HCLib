@@ -1,3 +1,6 @@
+/*Executing the same code with -O3 flag gives segmentation fault because of Waitall API
+so, please execute without this flag*/
+
 #include <mpi.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,7 +49,7 @@ int main(int argc, char **argv) {
     if (rank == 0) {
         int dest;
 
-        //initilaizing A and B by the master only
+        //initializing A and B by the master only
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 A[i][j] = 1;
@@ -65,7 +68,6 @@ int main(int argc, char **argv) {
         start[t] = end[t-1];
         end[t] = start[t] + batch_size;
         left = left - batch_size;
-        // printf("%d %d %d\n", start[t], end[t], left);
     }
 
     //Broadcasting B
@@ -73,27 +75,31 @@ int main(int argc, char **argv) {
         MPI_Ibcast(B[i], N, MPI_INT, 0, MPI_COMM_WORLD, &(req_array[0]));
     }
     MPI_Wait(&(req_array[0]), &stats);
-    // printf("all broadcasted!\n");
 
     //scattering A
     // for (int i = 0; i < N; i++) {
-        // MPI_Iscatter
         // MPI_Scatter(A, (N/np)*N, MPI_INT, A, (N/np)*N, MPI_INT, 0, MPI_COMM_WORLD);
     // }
-    // printf("all scattered!\n");
+
     if (rank == 0) {
 
         for (int t = 1; t < np; t++) {
             dest = t;
+
+            //Logically, A should be scattered here i.e. collective communication is used but since there can be uneven 
+            //distribution of data amongst the processes so normal scatter API won't help rather scatterv should be used
+            //but since it's not covered in the lectures only pt2pt send, recv APIs are used. 
+
             //sending A
             for (int i = start[t]; i < end[t]; i++) {
+                //sending a row at a time to one of the process
                 MPI_Isend(A[i], N, MPI_INT, dest, tag, MPI_COMM_WORLD, &(req_array[dest-1]));
             }
         }
 
         MPI_Waitall(np-1, req_array, stats_array);
-        // printf("A sent\n");
 
+        //After sending all the data, root node starts its computation. 
         long initial = get_usecs();
 
         for (int i = start[0]; i < end[0]; i++) {
@@ -116,8 +122,9 @@ int main(int argc, char **argv) {
 
         MPI_Waitall(np-1, req_array, stats_array);
 
-        long end = get_usecs();
-        double dur = ((double)(end-initial))/1000000;
+        long ending = get_usecs();
+        double dur = ((double)(ending-initial))/1000000;
+        //this is the elapsed time after sending data to all nodes and receiving data from all other nodes.
         printf("Time = %.3fs\n", dur);
         
     }else {
@@ -130,7 +137,6 @@ int main(int argc, char **argv) {
         }
 
         MPI_Wait(&(req_array[rank-1]), &stats);
-        // printf("A recv\n");
 
         for (int i = start[rank]; i < end[rank]; i++) {
             for (int j = 0; j < N; j++) {
@@ -141,26 +147,6 @@ int main(int argc, char **argv) {
             }
         }
         
-        // printf("-----------%d----------\n", rank);
-        // for (int i = start; i < end; i++) {
-        //     for (int j = 0; j < N; j++) {
-        //         printf("rank %d %d ", rank, A[i][j]);
-        //     }
-        //     printf("\n");
-        // }
-        // printf("\n");
-        // for (int i = start; i < end; i++) {
-        //     for (int j = 0; j < N; j++) {
-        //         printf("rank %d %d ", rank, B[i][j]);
-        //     }
-        //     printf("\n");
-        // }
-        // for (int i = start; i < end; i++) {
-        //     for (int j = 0; j < N; j++) {
-        //         printf("%d ", C[i][j]);
-        //     }
-        //     printf("\n");
-        // }
         int dest = 0;
         for (int i = start[rank]; i < end[rank]; i++) {
             MPI_Isend(C[i], N, MPI_INT, dest, tag, MPI_COMM_WORLD, &(req_array[rank-1]));
@@ -174,14 +160,12 @@ int main(int argc, char **argv) {
         int expected = 1; 
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
-                // printf("%d ", C[i][j]);
                 if (C[i][j] != N) {
                     printf("0: Test FAILED\n");
                     expected = 0;
                     break;
                 }
             }
-            // printf("\n");
             if (expected == 0) break;
         }
         if(expected == 1) printf("0: Test SUCCESS\n"); 
